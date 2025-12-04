@@ -1,0 +1,29 @@
+<div id="game-container">
+    <header id="resources-panel">
+        <div class="resource-item">金幣: <span id="gold">0</span></div>
+        <div class="resource-item">經驗值: <span id="exp">0</span></div>
+        <div class="resource-item">閒置產出: <span id="gold-per-sec">0</span>/sec</div>
+        <div class="resource-item">下次升級: <span id="next-level-exp">100</span> EXP</div>
+    </header>
+
+    <div id="main-content">
+        <section id="game-area">
+            <div id="log-area">
+                <p>遊戲開始！歡迎來到您的自動化帝國。</p>
+            </div>
+
+            <div id="actions-panel">
+                <h4>手動操作</h4>
+                <button id="manual-collect">手動採集 ( +1 金幣)</button>
+                <button id="explore-area">探索新區域 (耗時 5 秒)</button>
+            </div>
+        </section>
+
+        <aside id="upgrades-panel">
+            <h4>升級與自動化</h4>
+            <div id="upgrade-list">
+                </div>
+        </aside>
+    </div>
+</div>
+<script src="game.js"></script>
