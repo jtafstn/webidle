@@ -1,29 +1,26 @@
-<div id="game-container">
-    <header id="resources-panel">
-        <div class="resource-item">金幣: <span id="gold">0</span></div>
-        <div class="resource-item">經驗值: <span id="exp">0</span></div>
-        <div class="resource-item">閒置產出: <span id="gold-per-sec">0</span>/sec</div>
-        <div class="resource-item">下次升級: <span id="next-level-exp">100</span> EXP</div>
-    </header>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8" />
+<title>test</title>
+<link rel="stylesheet" href="style.css">
+</head>
 
-    <div id="main-content">
-        <section id="game-area">
-            <div id="log-area">
-                <p>遊戲開始！歡迎來到您的自動化帝國。</p>
-            </div>
+<body>
+<div class="main-row">
+  <div class="zuo-panel">                <!--左側欄位-->
+    <h2>左邊功能選單</h2>
+    <div class="skillpanel" onclick="loadpage('skill1')">skill1</div>
+    <div class="skillpanel" onclick="loadpage('skill2')">skill2</div>
+    <div class="skillpanel" onclick="loadpage('skill3')">skill3</div>
+    <div class="skillpanel" onclick="loadpage('skill4')">skill4</div>
+    <div class="skillpanel" onclick="loadpage('skill5')">skill5</div>
+  </div>
 
-            <div id="actions-panel">
-                <h4>手動操作</h4>
-                <button id="manual-collect">手動採集 ( +1 金幣)</button>
-                <button id="explore-area">探索新區域 (耗時 5 秒)</button>
-            </div>
-        </section>
-
-        <aside id="upgrades-panel">
-            <h4>升級與自動化</h4>
-            <div id="upgrade-list">
-                </div>
-        </aside>
-    </div>
+  <div class="yo-panel">                 <!--左側欄位-->
+    <h1>主畫面位置</h1>
+    <div id="contentArea">請選擇左側功能</div>
+  </div>
 </div>
-<script src="game.js"></script>
+
+</body>
+</html>

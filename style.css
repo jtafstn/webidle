@@ -1,103 +1,36 @@
-body {
-    background-color: #121212; /* 深色背景 */
-    color: #c9c9c9;
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  body {
+    background: #f1f3f5;
+    font-family: sans-serif;
     margin: 0;
     padding: 0;
-    display: flex;
-    justify-content: center;
-}
+  }
 
-/* --- 網格容器設定 --- */
-#game-container {
-    width: 95%;
-    max-width: 1200px;
-    margin: 20px auto;
-    border: 3px solid #333;
+  .main-row {
+    display: flex;
+    height: 100vh; /* 讓高度撐滿整個畫面 */
+  }
+
+  /* 左邊固定寬度 */
+  .zuo-panel {
+    width: 300px;
+    background: white;
+    padding: 20px;
+    box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+    overflow-y: auto; /* 讓內容太多時可捲動 */
+  }
+
+  /* 右邊自動填滿 */
+  .yo-panel {
+    flex: 1;
+    background: #ffffff;
+    padding: 20px;
+    overflow-y: auto; /* 讓內容太多時可捲動 */
+  }
+
+    .panel {
+    background: #f8f9fa;
     padding: 15px;
-    background-color: #1e1e1e;
-    
-    display: grid;
-    /* 定義佈局: 頂部資源，下方 主內容區 (佔3份) 與 升級區 (佔1份) */
-    grid-template-areas: 
-        "resources resources" 
-        "game upgrades";
-    grid-template-columns: 3fr 1fr; /* 寬度比例 3:1 */
-    grid-template-rows: auto 1fr; /* 資源欄高度自適應，內容欄佔剩餘 */
-    gap: 15px;
-    min-height: 80vh;
-}
-
-/* --- 1. 資源面板樣式 --- */
-#resources-panel {
-    grid-area: resources;
-    display: flex;
-    justify-content: space-between; /* 資源項目分開 */
-    align-items: center;
-    padding: 15px 20px;
-    margin-bottom: 10px;
-    background-color: #282828;
-    border: 1px solid #444;
-    font-size: 1.1em;
-}
-
-.resource-item {
-    font-weight: bold;
-    /* 產出數字使用亮色突出 */
-    color: #4CAF50; /* 綠色 */
-}
-
-/* --- 2. 主遊戲區樣式 --- */
-#game-area {
-    grid-area: game;
-    display: flex;
-    flex-direction: column; /* 垂直排列日誌和操作 */
-    gap: 15px;
-}
-
-#log-area {
-    flex-grow: 1; /* 佔據大部分垂直空間 */
-    height: 400px; /* 設定基礎高度 */
-    overflow-y: auto; /* 訊息多時可捲動 */
-    padding: 10px;
-    background-color: #000;
-    border: 1px solid #444;
-    line-height: 1.6;
-}
-
-#actions-panel {
-    padding: 15px;
-    background-color: #282828;
-    border: 1px solid #444;
-    display: flex;
-    gap: 10px;
-}
-
-/* --- 3. 升級面板樣式 --- */
-#upgrades-panel {
-    grid-area: upgrades;
-    padding: 15px;
-    background-color: #282828;
-    border: 1px solid #444;
-    overflow-y: auto; /* 升級項目多時可滾動 */
-}
-
-/* --- 按鈕通用樣式 --- */
-button {
-    padding: 12px 20px;
-    background-color: #007acc; /* 藍色系 */
-    color: white;
-    border: none;
-    cursor: pointer;
-    font-size: 1em;
-    transition: background-color 0.2s;
-}
-
-button:hover:not(:disabled) {
-    background-color: #005f99;
-}
-
-button:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
+    border-radius: 12px;
+    margin-bottom: 20px;
+    box-shadow: 0 0 5px rgba(0,0,0,0.1);
+  }
