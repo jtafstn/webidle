@@ -1,0 +1,10 @@
+{
+  "name": "My Web Game Dev Environment",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ritwickdey.LiveServer"
+      ]
+    }
+  }
+}
