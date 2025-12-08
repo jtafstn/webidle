@@ -34,3 +34,26 @@
     margin-bottom: 20px;
     box-shadow: 0 0 5px rgba(0,0,0,0.1);
   }
+
+  /* --- 倉庫表格樣式 --- */
+#warehouse-table {
+    width: 100%;
+    max-width: 700px; /* 限制表格最大寬度 */
+    margin: 20px auto;
+    border-collapse: collapse; /* 消除表格雙邊框 */
+}
+
+#warehouse-table td {
+    width: 10%; /* 確保 10 欄平均分配寬度 */
+    height: 60px; /* 設定單元格高度，使其呈方形 */
+    border: 1px solid #ccc;
+    text-align: center;
+    vertical-align: middle;
+    background-color: #ffffff;
+    cursor: pointer;
+    transition: background-color 0.1s;
+}
+
+#warehouse-table td:hover {
+    background-color: #e8f8f8;
+}

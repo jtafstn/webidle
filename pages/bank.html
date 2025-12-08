@@ -1,2 +1,45 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <title>Bank Page</title>
+  <link rel="stylesheet" href="../style.css">
+  <script src="../main.js" defer></script>
+</head>
+<body>
 
-  <H1>bank page</H1>
+<div id="inventory-page-content">
+    <h2>📦bank</h2>
+
+    <div id="page-controls-container">
+        <button class="action-button inventory-nav-btn">按鈕 1</button>
+        <button class="action-button inventory-nav-btn">按鈕 2</button>
+        <button class="action-button inventory-nav-btn">按鈕 3</button>
+        <button class="action-button inventory-nav-btn">按鈕 4</button>
+    </div>
+
+    <div id="warehouse-container">
+        <table id="warehouse-table">
+            <tbody>
+                </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    // 使用 JavaScript 動態生成 10 行 x 10 列的儲存格
+    const table = document.getElementById('warehouse-table');
+    const rows = 10;
+    const cols = 10;
+    
+    for (let r = 0; r < rows; r++) {
+        const row = table.insertRow();
+        for (let c = 0; c < cols; c++) {
+            const cell = row.insertCell();
+            // 每個儲存格都有唯一的 ID，方便遊戲邏輯精確定位
+            cell.id = `cell-r${r}c${c}`; 
+        }
+    }
+</script>
+</body>
+</html>

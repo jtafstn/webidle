@@ -9,21 +9,19 @@
 <div class="main-row">
   <div class="zuo-panel">                <!--左側欄位-->
     <h2>左邊功能選單</h2>
-    <button data-page="bank">bank page</button>
+     <button onclick="loadPage('pages/bank.html')">銀行</button>
     <div class="skillpanel" onclick="loadpage('skill1')">skill1</div>
-    <div class="skillpanel" onclick="loadpage('skill2')">skill2</div>
-    <div class="skillpanel" onclick="loadpage('skill3')">skill3</div>
-    <div class="skillpanel" onclick="loadpage('skill4')">skill4</div>
-    <div class="skillpanel" onclick="loadpage('skill5')">skill5</div>
   </div>
 
-  <div class="yo-panel">                 <!--左側欄位-->
-    <h1>主畫面位置</h1>
-    <div id="contentArea">請選擇左側功能</div>
-    <div class="yo-panel" id="content">
+  <div class="yo-panel">                 <!--右側欄位-->
+ <iframe id="mainFrame" src="" style="width:100%; height:100%; border:none;"></iframe>
    <!-- JS 會把外部頁面插在這裡 -->
   </div>
 </div>
-
+<script>
+function loadPage(page){
+    document.getElementById("mainFrame").src = page;
+}
+</script>
 </body>
 </html>
