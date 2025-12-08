@@ -1,31 +1,23 @@
-function loadPage(page) {
-  let content = "";
+// 取得右側顯示區域
+const contentArea = document.getElementById("content");
 
-  if (page === "page1") {
-    content = `
-      <h2>資源頁面</h2>
-    `;
-  }
+// 左側按鈕綁定事件
+document.querySelectorAll("[data-page]").forEach(button => {
+    button.addEventListener("click", () => {
+        let page = button.dataset.page;
+        loadPage(page);
+    });
+});
 
-  else if (page === "page2") {
-    content = `
-      <h2>建造頁面</h2>
-      <p>可以建造的項目：</p>
-      <ul>
-        <li>1</li>
-        <li>2</li>
-        <li>3</li>
-      </ul>
-    `;
-  }
-
-  else if (page === "page3") {
-    content = `
-      <h2>商店頁面</h2>
-      <p>你可以</p>
-    `;
-  }
-
-  // 將內容塞進右邊容器
-  document.getElementById("contentArea").innerHTML = content;
+// 動態載入外部 HTML 頁面
+function loadPage(pageName) {
+    fetch(`pages/${pageName}.html`)
+        .then(res => res.text())
+        .then(html => {
+            contentArea.innerHTML = html;
+        })
+        .catch(err => {
+            contentArea.innerHTML = `<p style="color:red">載入失敗：${err}</p>`;
+        });
 }
+
