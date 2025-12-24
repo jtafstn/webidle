@@ -1,0 +1,199 @@
+<!--
+    bank.html（銀行／倉庫頁）
+
+    用途：
+    - 提供「倉庫 UI」：包含頁籤（分類）與格子（10x10）
+    - 作為未來放置物品、拖曳、分類、批量操作的畫面基礎
+
+    影響範圍：
+    - 只影響右側內容區（#main-content）顯示的 DOM
+    - 目前這頁的 inline script 只「建立格子」，不會改動 window.playerData（全域狀態）
+
+    教學：
+    - 這個檔案會被 main.js 的 loadPage() 動態插入，因此不需要完整的 <html>/<head>/<body>
+    - 這裡先把「畫面骨架」做出來，真正的物品資料與互動邏輯可後續再接
+-->
+<div id="inventory-page-content">
+    <!--
+        h2（頁面標題）
+        用途：讓使用者知道目前在 bank 頁面
+        影響範圍：純顯示
+    -->
+    <h2>📦bank</h2>
+
+    <!--
+        #bank-content-wrapper（主要內容容器）
+        用途：把倉庫區塊置中並限制寬度
+        影響範圍：影響倉庫整體大小（透過 CSS width: 80vmin）
+    -->
+    <div id="bank-content-wrapper">
+        <!--
+            #page-controls-container（頁面控制區）
+            用途：放置「批量選擇」等操作按鈕
+            影響範圍：目前只有 UI，尚未綁定 JS 行為
+        -->
+        <div id="page-controls-container">
+            <button class="action-button">批量選擇</button>
+        </div>
+
+        <!--
+            #warehouse-container（倉庫框架）
+            用途：包住「頁籤列」與「格子區」
+            影響範圍：使用 flex 讓頁籤在上、格子在下
+        -->
+        <div id="warehouse-container">
+            <!--
+                #warehouse-tabs-container（分類頁籤列）
+                用途：切換分類（全部/貴重/裝備/消耗品）
+                影響範圍：目前僅視覺，不含分類過濾邏輯
+            -->
+            <div id="warehouse-tabs-container">
+                <button class="tab-button active">全部</button>
+                <button class="tab-button">貴重</button>
+                <button class="tab-button">裝備</button>
+                <button class="tab-button">消耗品</button>
+            </div>
+            <!--
+                #warehouse-grid（格子容器，使用 CSS Grid）
+                用途：取代 table，用 div + grid 做 10x10 倉庫格
+                影響範圍：後續可在每個格子內放置物品圖示/數量/狀態
+            -->
+            <div id="warehouse-grid"></div>
+        </div>
+    </div>
+</div>
+
+<!-- 
+    將 style 移至 HTML 頂部或外部 CSS 檔是常見做法，
+    但為了保持頁面獨立性，暫時將其保留在檔案底部。
+    這裡的 CSS 經過重構以解決對齊和儲存格比例問題。
+    如需載入 JS，請使用 <script src="pages/bank/xxx.js"></script> 以相對於 index.html 的正確路徑。
+-->
+<style>
+    /*
+        這段 CSS 是 bank 頁面的「頁面內樣式」
+        用途：讓 bank 頁面可以自給自足（不依賴額外 CSS 檔）
+        影響範圍：只影響這個頁面插入後產生的 DOM
+    */
+
+    #inventory-page-content h2 {
+        text-align: center;
+    }
+
+    /* 主要內容區塊置中 */
+    #bank-content-wrapper {
+        margin: 0 auto;
+        /* 
+         * 在這裡調整倉庫的整體大小。
+         * 數字越大，格子就越大。'vmin' 單位會根據視窗較小的一邊來縮放。
+         */
+        width: 80vmin; 
+    }
+
+    #page-controls-container {
+        margin-bottom: 10px; /* 與下方頁籤的間距 */
+    }
+
+    /* 頁籤容器 */
+    #warehouse-container {
+        display: flex;
+        flex-direction: column;
+    }
+
+    #warehouse-tabs-container {
+        /* 透過 flex 佈局，不再需要 margin-bottom hack */
+        position: relative;
+        z-index: 2; /* 提高層級，確保在表格之上 */
+        /* 讓按鈕底部對齊 */
+        align-self: flex-start;
+        /* 修正：移除 HTML 換行造成的按鈕間隙 */
+        font-size: 0;
+    }
+
+    /* 頁籤按鈕基本樣式 */
+    .tab-button {
+        padding: 8px 16px;
+        border: 1px solid #ccc;
+        border-bottom: none; /* 預設無下邊框 */
+        border-radius: 8px 8px 0 0; /* 頂部圓角 */
+        background-color: #f0f0f0;
+        cursor: pointer;
+        /* 修正：恢復按鈕內的字體大小 */
+        font-size: 1rem; /* 或者您希望的任何字體大小，如 14px */
+    }
+
+    /* 非啟用狀態的頁籤，看起來在後面 */
+    .tab-button:not(.active) {
+        background-color: #e0e0e0;
+        border-color: #ccc;
+    }
+    .tab-button:not(.active):hover {
+        background-color: #d5d5d5;
+    }
+
+    /* 啟用狀態的頁籤，看起來與下方內容區塊相連 */
+    .tab-button.active {
+        background-color: #fff; /* 與表格背景同色 */
+        border-color: #aaa;
+        border-bottom: 1px solid #fff; /* 用與背景同色的邊框蓋掉表格上邊框 */
+    }
+
+    /* 倉庫網格容器 (取代 table) */
+    #warehouse-grid {
+        width: 100%; /* 填滿父容器寬度 */
+        aspect-ratio: 1 / 1; /* 強制寬高比為 1:1，使其成為正方形 */
+        
+        display: grid;
+        grid-template-columns: repeat(10, 1fr); /* 10 個等寬的欄 */
+        grid-template-rows: repeat(10, 1fr);    /* 10 個等高的列 */
+        
+        border: 1px solid #aaa;
+        background-color: #fff; /* 設定背景色以搭配 active 頁籤 */
+        position: relative;
+        z-index: 1;
+        margin-top: -1px; /* 將表格向上移動 1px，與頁籤邊框重疊 */
+    }
+
+    /* 倉庫儲存格 */
+    .grid-cell {
+        border: 1px solid #ddd;
+    }
+</style>
+
+<script>
+    /*
+        這段 JS 只做一件事：產生 10x10 的格子 DOM
+
+        用途：
+        - 讓 #warehouse-grid 裡面有 100 個 .grid-cell
+        - 先把視覺格子做出來，方便後續接上物品資料與互動
+
+        影響範圍：
+        - 只新增 DOM，不修改 window.playerData
+        - 每個格子會有唯一的 id，方便未來用程式精準定位某一格
+    */
+
+    // 取得格子容器（warehouse-grid）
+    const grid = document.getElementById('warehouse-grid');
+
+    // rows/cols：設定倉庫的列數與欄數（10x10）
+    const rows = 10;
+    const cols = 10;
+    
+    // 逐一建立 rows*cols 個格子
+    for (let i = 0; i < rows * cols; i++) {
+        // 建立一個 div 代表一格
+        const cell = document.createElement('div');
+
+        // 加上 class，讓 CSS 能套用格子外觀
+        cell.classList.add('grid-cell');
+
+        // 每個儲存格都有唯一的 ID，方便遊戲邏輯精確定位
+        // 用途：把線性索引 i 轉成 row/col
+        // 影響範圍：後續可用 document.getElementById('cell-r0c0') 取得特定格子
+        cell.id = `cell-r${Math.floor(i / cols)}c${i % cols}`; 
+
+        // 把格子放到容器裡
+        grid.appendChild(cell);
+    }
+</script>

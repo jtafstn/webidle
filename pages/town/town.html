@@ -1,0 +1,841 @@
+<!--
+    town.html（城鎮／經營頁）
+
+    用途：
+    - 提供 Town（城鎮）場景的互動 UI（點擊賺錢 + 懸浮面板）
+    - 顯示「經營（jinin）」/「技能（skill）」/「數據（data）」面板
+    - 提供 item tooltip（提示框）顯示 item 的 info
+
+    影響範圍：
+    - 會讀寫 window.playerData（全域狀態）：例如 upgrades / unlockedItems / learnedSkills
+    - 會依賴外部腳本建立資料表：pages/town/jinin.js（JININ_ITEMS）、pages/town/skill.js（SKILL_ITEMS）
+    - 會依賴 pages/town/town.js 提供全域 API：window.purchaseItem / window.learnSkill
+
+    教學：
+    - 本檔案會被 main.js 的 loadPage() 動態插入到 index.html 的 #main-content
+    - 因此這裡不需要完整的 <html>/<head>/<body>，只要提供「頁面內容」即可
+-->
+
+<!--
+    #town-wrapper（本頁主容器）
+    用途：提供相對定位基準，讓懸浮控制與 tooltip 可以正確定位
+    影響範圍：本頁所有 UI 都包在這裡，事件委派也會以這個區塊為主
+-->
+<div id="town-wrapper">
+    <div id="town-content">
+        <!-- 點擊區域，觸發金幣產出，顯示標題與提示 -->
+        <h2>Town</h2>
+    </div>
+
+        <!-- 懸浮控制按鈕與面板
+            用途：切換經營、技能、數據等功能面板
+            影響範圍：浮動面板內容、互動按鈕、面板切換
+        -->
+    <!--
+        #floating-controls-container（懸浮控制列）
+        用途：放置「經營/技能/數據」三個按鈕與其對應面板
+        影響範圍：
+        - 透過 data-target 指向對應面板 id
+        - 點擊按鈕後會切換 .open class 來顯示/隱藏面板
+    -->
+    <div id="floating-controls-container">
+        <div class="control-group">
+            <!--
+                .floating-btn（面板切換按鈕）
+                data-target：指定要打開哪個面板（panel-management）
+                用途：點擊後顯示經營面板
+                影響範圍：觸發 renderManagementPanel() 並切換 open
+            -->
+            <button class="floating-btn" data-target="panel-management">經營</button>
+            <div id="panel-management" class="floating-panel management-panel">
+                <div class="management-purchasable">
+                    <!-- 可購買項目將動態生成於此 -->
+                </div>
+                <hr class="panel-separator">
+                <div class="management-purchased">
+                    <!-- 已購買項目將動態生成於此 -->
+                </div>
+            </div>
+        </div>
+        <div class="control-group">
+            <!-- 技能面板：內容由 renderSkillsPanel() 動態生成 -->
+            <button class="floating-btn" data-target="panel-skills">技能</button>
+            <div id="panel-skills" class="floating-panel">
+
+            </div>
+        </div>
+        <div class="control-group">
+            <!-- 數據面板：內容由 renderDataPanel() 動態生成 -->
+            <button class="floating-btn" data-target="panel-data">數據</button>
+            <div id="panel-data" class="floating-panel">
+            </div>
+        </div>
+    </div>
+
+        <!-- 用於顯示懸浮說明的工具提示框
+            用途：滑鼠移至項目時顯示詳細說明
+        -->
+    <!--
+        #item-tooltip（提示框 / tooltip）
+        用途：滑鼠移到 item 方形按鈕上時，在游標旁顯示該 item 的 info
+        影響範圍：只影響顯示，不會改動任何玩家狀態
+    -->
+    <div id="item-tooltip" class="tooltip"></div>
+</div>
+
+<style>
+        /*
+            這段 style 是 town 頁面的「頁面內樣式」
+
+            用途：
+            - 定義 town 場景的主互動區（#town-content）
+            - 定義點擊 +金幣 的浮動文字（.floating-text）動畫
+
+            影響範圍：
+            - 只影響本頁插入後的 DOM
+        */
+    #town-wrapper {
+        position: relative;
+        width: 100%;
+        height: 100%;
+    }
+    #town-content {
+        height: 100%;
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        cursor: pointer;
+        position: relative;
+        user-select: none; /* 防止點擊時選取文字 */
+        background-color: #f0f8ff;
+        border-radius: 10px;
+    }
+
+    /*
+        .floating-text（點擊回饋文字）
+        用途：顯示 "+X" 並向上漂浮後淡出
+        影響範圍：視覺回饋，不影響實際金幣計算
+    */
+    .floating-text {
+        position: absolute;
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: #DAA520; /* 金色 */
+        pointer-events: none; /* 讓文字不影響滑鼠事件 */
+        animation: float-up 1s ease-out forwards;
+        text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
+    }
+
+    /*
+        @keyframes float-up（漂浮動畫）
+        用途：控制 .floating-text 的移動與透明度變化
+        影響範圍：只影響使用 animation: float-up 的元素
+    */
+    @keyframes float-up {
+        0% {
+            transform: translateY(0);
+            opacity: 1;
+        }
+        100% {
+            transform: translateY(-50px);
+            opacity: 0;
+        }
+    }
+</style>
+
+<!-- 載入經營項目、技能、主邏輯腳本
+    用途：初始化經營、技能、互動行為
+    影響範圍：JININ_ITEMS、SKILL_ITEMS、互動事件
+-->
+<script src="pages/town/jinin.js"></script>
+<script src="pages/town/skill.js"></script>
+<script src="pages/town/town.js"></script>
+<script>
+    /*
+        town.html 的主程式（頁面內 JS）
+
+        用途：
+        - 建立/更新三個面板（經營/技能/數據）的內容
+        - 綁定事件（點按鈕、hover 顯示 tooltip、點擊購買/學習）
+
+        影響範圍：
+        - 會讀寫 window.playerData（例如 unlockedItems / learnedSkills）
+        - 會呼叫 window.purchaseItem / window.learnSkill 以改變玩家狀態
+
+        教學：
+        - 本頁使用事件委派（Event Delegation，事件委派）：
+          把事件綁在面板容器上，讓動態生成的按鈕也能吃到事件
+    */
+
+    // 使用 IIFE (立即調用函式表達式) 避免污染全域作用域
+    // 用途：將所有互動、渲染、事件邏輯封裝於本頁，避免全域污染
+    (function() { // 將箭頭函式改為普通函式以使用 this
+        // --- 遊戲核心邏輯 ---
+        // 用途：初始化主互動區、確保 playerData 存在
+        const townContent = document.getElementById('town-content');
+        const townWrapper = document.getElementById('town-wrapper');
+
+        // 確保 playerData 存在
+        if (!window.playerData) {
+            window.playerData = {
+                gold: 0,
+                upgrades: [],
+                unlockedItems: [],
+                learnedSkills: []
+            };
+        }
+        // 防呆：舊存檔或其他頁面初始化未含這些欄位
+        window.playerData.upgrades = window.playerData.upgrades || [];
+        window.playerData.unlockedItems = window.playerData.unlockedItems || [];
+        window.playerData.learnedSkills = window.playerData.learnedSkills || [];
+
+        // --- DOM 元素獲取 ---
+        // 用途：取得所有面板、控制、提示等 DOM 元素
+        const container = document.getElementById('floating-controls-container');
+        const managementPanel = document.getElementById('panel-management');
+        const skillsPanel = document.getElementById('panel-skills');
+        const tooltip = document.getElementById('item-tooltip');
+
+        if (!container || !managementPanel || !skillsPanel || !tooltip) return;
+
+        // 頁面載入時，呼叫全域的 updateUI 來同步一次金幣顯示
+        // 用途：確保金幣顯示與主狀態同步
+        window.updateUI();
+
+        // --- 自動賺錢初始化 ---
+        // 用途：未來可擴充自動產出功能
+        // 透過檢查一個全域標記，確保這個初始化函式只會執行一次
+        if (!window.autoGoldInitialized) {
+            window.autoGoldInitialized = true;
+            console.log("自動賺錢模組已初始化 (未來功能)");
+            // 未來可以在這裡設定 setInterval 來自動增加金幣
+            // setInterval(() => {
+            //    window.playerData.gold += 1; // 假設每秒自動加 1
+            //    window.updateUI();
+            // }, 1000);
+        }
+
+        // --- 擴充全域 UI 更新函式 ---
+        // 用途：裝飾 window.updateUI，讓本頁面可自動刷新面板內容
+        // 透過裝飾者模式，為 window.updateUI 附加此頁面專屬的更新邏輯
+        const originalUpdateUI = window.updateUI;
+        window.updateUI = function() {
+            // 1. 執行原始的 updateUI 函式 (例如更新主選單的金幣)
+            originalUpdateUI.apply(this, arguments);
+
+            // 2. 執行此頁面專屬的更新邏輯
+            // 如果經營面板是打開的，就重新渲染它
+            if (managementPanel.classList.contains('open')) {
+                renderManagementPanel();
+            }
+            if (skillsPanel.classList.contains('open')) {
+                renderSkillsPanel();
+            }
+        };
+
+        // --------------------------------------------------
+        // 經營面板渲染函式
+        // 用途：
+        // - 上半部：顯示可購買 items（方形按鈕）
+        // - 下半部：顯示已購買 items（方形按鈕）
+        // 影響範圍：只改動面板 DOM，不直接扣款（扣款由 purchaseItem 處理）
+        // --------------------------------------------------
+        function renderManagementPanel() {
+            const purchasableContainer = managementPanel.querySelector('.management-purchasable');
+            const purchasedContainer = managementPanel.querySelector('.management-purchased');
+            const separator = managementPanel.querySelector('.panel-separator');
+
+            purchasableContainer.innerHTML = ''; // 清空舊內容
+            purchasedContainer.innerHTML = '';   // 清空舊內容
+
+            // 依規格：面板固定用粗分隔線切成上下兩區
+            if (separator) separator.style.display = 'block';
+
+            // 找出已購買的最新 farm 与 core
+            let latestFarmId = null;
+            let maxFarmNum = -1;
+            let latestCoreId = null;
+            let maxCoreNum = -1;
+            window.playerData.upgrades.forEach(id => {
+                if (id.startsWith('farm')) {
+                    const num = parseInt(id.replace('farm', ''), 10);
+                    if (num > maxFarmNum) {
+                        maxFarmNum = num;
+                        latestFarmId = id;
+                    }
+                }
+                if (id.startsWith('core')) {
+                    const num = parseInt(id.replace('core', ''), 10);
+                    if (num > maxCoreNum) {
+                        maxCoreNum = num;
+                        latestCoreId = id;
+                    }
+                }
+            });
+
+            // 逐一走訪經營資料表（JININ_ITEMS）來決定顯示哪些按鈕
+            for (const itemId in JININ_ITEMS) {
+                const item = JININ_ITEMS[itemId];
+                const isPurchased = window.playerData.upgrades.includes(itemId);
+
+                // 如果項目未購買，檢查是否滿足解鎖條件
+                // unlockedItems：把「曾經滿足解鎖條件」的項目記下來
+                // 用途：避免 UI 因為條件短暫不滿足就把項目藏起來
+                if (!isPurchased && item.tiougian(window.playerData)) {
+                    // 如果滿足條件且尚未被記錄，則將其加入解鎖列表
+                    if (!window.playerData.unlockedItems.includes(itemId)) {
+                        window.playerData.unlockedItems.push(itemId);
+                    }
+                }
+
+                if (isPurchased) {
+                    // 判斷是否要顯示這個已購買的項目
+                    const isFarm = itemId.startsWith('farm');
+                    const isCore = itemId.startsWith('core');
+                    // 如果是 farm 或 core，只顯示最新的那一個；如果不是 farm/core，則直接顯示
+                    if ((isFarm && itemId === latestFarmId) || (isCore && itemId === latestCoreId) || (!isFarm && !isCore)) {
+                        const itemBtn = document.createElement('button');
+                        itemBtn.type = 'button';
+                        itemBtn.className = 'mgmt-item-owned';
+                        itemBtn.dataset.itemId = itemId;
+                        itemBtn.setAttribute('aria-disabled', 'true');
+                        itemBtn.textContent = item.name;
+                        purchasedContainer.appendChild(itemBtn);
+                    }
+
+                } else if (window.playerData.unlockedItems.includes(itemId)) { // 判斷是否已解鎖
+                    const btn = document.createElement('button');
+                    btn.className = 'mgmt-item-btn';
+                    btn.dataset.itemId = itemId;
+                    btn.textContent = item.name;
+                    // 如果金幣不足，標記 unaffordable
+                    // 教學：這裡不使用 button.disabled，因為 disabled 會讓 hover 事件失效
+                    //       我們希望「買不起也能 hover 看 info」，所以用 aria-disabled + class
+                    const unaffordable = window.playerData.gold < item.cost;
+                    if (unaffordable) {
+                        btn.classList.add('unaffordable');
+                        btn.setAttribute('aria-disabled', 'true');
+                    } else {
+                        // 強化可購買按鈕的視覺：增加可聚焦及提示
+                        btn.classList.add('affordable');
+                        btn.setAttribute('aria-disabled', 'false');
+                    }
+                    purchasableContainer.appendChild(btn);
+                }
+            }
+        }
+
+        // --------------------------------------------------
+        // 技能面板渲染函式
+        // 用途：
+        // - 上半部：顯示可學習技能（方形按鈕）
+        // - 下半部：顯示已學習技能（方形按鈕）
+        // 影響範圍：只改動面板 DOM，不直接扣款（扣款由 learnSkill 處理）
+        // --------------------------------------------------
+        function renderSkillsPanel() {
+            skillsPanel.innerHTML = '';
+
+            const purchasableContainer = document.createElement('div');
+            purchasableContainer.className = 'skill-purchasable';
+
+            const separator = document.createElement('hr');
+            separator.className = 'panel-separator';
+
+            const purchasedContainer = document.createElement('div');
+            purchasedContainer.className = 'skill-purchased';
+
+            const learned = window.playerData.learnedSkills || [];
+
+            for (const skillId in SKILL_ITEMS) {
+                const skill = SKILL_ITEMS[skillId];
+                const isLearned = learned.includes(skillId);
+
+                if (isLearned) {
+                    const ownedBtn = document.createElement('button');
+                    ownedBtn.type = 'button';
+                    ownedBtn.className = 'skill-item-owned';
+                    ownedBtn.dataset.itemId = skillId;
+                    ownedBtn.setAttribute('aria-disabled', 'true');
+                    ownedBtn.textContent = skill.name;
+                    purchasedContainer.appendChild(ownedBtn);
+                    continue;
+                }
+
+                if (typeof skill.tiougian === 'function' && !skill.tiougian(window.playerData)) {
+                    continue;
+                }
+
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'skill-item-btn';
+                btn.dataset.itemId = skillId;
+                btn.textContent = skill.name;
+
+                const unaffordable = (window.playerData.gold || 0) < skill.cost;
+                if (unaffordable) {
+                    btn.classList.add('unaffordable');
+                    btn.setAttribute('aria-disabled', 'true');
+                } else {
+                    btn.setAttribute('aria-disabled', 'false');
+                }
+
+                purchasableContainer.appendChild(btn);
+            }
+
+            skillsPanel.appendChild(purchasableContainer);
+            skillsPanel.appendChild(separator);
+            skillsPanel.appendChild(purchasedContainer);
+        }
+
+        // --------------------------------------------------
+        // 數據面板渲染函式
+        // 用途：顯示玩家當前狀態摘要（gold / gps / gpc）
+        // 影響範圍：只讀取 window.playerData，不會修改
+        // --------------------------------------------------
+        function renderDataPanel() {
+            // 簡單顯示當前遊戲數據的摘要
+            const container = document.createElement('div');
+            container.style.display = 'flex';
+            container.style.flexDirection = 'column';
+            container.style.gap = '8px';
+
+            const gold = document.createElement('div');
+            gold.textContent = `目前金幣: ${Math.floor(window.playerData.gold)}`;
+            const gps = document.createElement('div');
+            gps.textContent = `每秒收入 (GPS): ${window.playerData.gps || 0}`;
+            const gpc = document.createElement('div');
+            gpc.textContent = `每次點擊 (GPC): ${window.playerData.gpc || 0}`;
+
+            container.appendChild(gold);
+            container.appendChild(gps);
+            container.appendChild(gpc);
+
+            const dataPanelContainer = document.getElementById('panel-data');
+            dataPanelContainer.innerHTML = '';
+            dataPanelContainer.appendChild(container);
+        }
+
+        // --------------------------------------------------
+        // openFloatingPanel（開啟指定面板）
+        // 用途：
+        // - 先關閉其他面板
+        // - 再渲染目標面板內容
+        // - 最後打開面板（加上 .open class）
+        // 影響範圍：只改動面板 DOM/class，不改動玩家狀態
+        // --------------------------------------------------
+        function openFloatingPanel(button, targetPanel) {
+            const targetPanelId = targetPanel.id;
+            // 關閉其它打開的面板
+            document.querySelectorAll('.floating-panel.open').forEach(panel => panel.classList.remove('open'));
+
+            // 先渲染對應面板內容
+            if (targetPanelId === 'panel-management') {
+                renderManagementPanel();
+            } else if (targetPanelId === 'panel-skills') {
+                renderSkillsPanel();
+            } else if (targetPanelId === 'panel-data') {
+                renderDataPanel();
+            }
+
+            // 顯示面板
+            targetPanel.classList.add('open');
+        }
+
+        // --------------------------------------------------
+        // 事件處理函式（Handlers，事件處理器）
+        // 用途：處理 hover tooltip、點擊購買/學習、面板切換
+        // 影響範圍：
+        // - tooltip handlers 只影響 tooltip 顯示
+        // - click handlers 會透過 API 改動 window.playerData
+        // --------------------------------------------------
+        // 滑鼠移入顯示提示
+        const handleMouseOver = (event) => {
+            // 擴大偵測範圍，偵測所有項目按鈕
+            const itemElement = event.target.closest('.mgmt-item-btn, .mgmt-item-owned, .skill-item-btn, .skill-item-owned');
+            if (itemElement) {
+                const itemId = itemElement.dataset.itemId;
+                const item = JININ_ITEMS[itemId] || SKILL_ITEMS[itemId]; // 從兩邊查找
+                if (item) {
+                    const infoText = (typeof item.info === 'function') ? item.info(window.playerData) : item.info;
+                    tooltip.textContent = infoText || '';
+                    tooltip.style.display = 'block';
+                    // 讓 tooltip 一出現就貼在游標旁，不用等 mousemove
+                    tooltip.style.left = `${event.clientX + 15}px`;
+                    tooltip.style.top = `${event.clientY + 15}px`;
+                }
+            }
+        };
+        // 滑鼠移出隱藏提示
+        const handleMouseOut = () => {
+            tooltip.style.display = 'none';
+        };
+        // 滑鼠移動時移動提示框
+        const handleMouseMove = (event) => {
+            tooltip.style.left = `${event.clientX + 15}px`;
+            tooltip.style.top = `${event.clientY + 15}px`;
+        };
+
+        // 經營購買：點擊上半部按鈕，呼叫 window.purchaseItem
+        // 影響範圍：會扣款、寫入 upgrades、可能改變 gps
+        const handlePurchaseClick = (event) => {
+            const btn = event.target.closest('.mgmt-item-btn');
+            if (!btn) return;
+            if (btn.classList.contains('unaffordable') || btn.getAttribute('aria-disabled') === 'true') return;
+
+            const itemId = btn.dataset.itemId;
+            // 使用統一購買 API
+            if (typeof window.purchaseItem === 'function') {
+                const result = window.purchaseItem(itemId);
+                if (result.success) {
+                    renderManagementPanel();
+                } else {
+                    console.log(result.message);
+                }
+            } else {
+                // fallback: 若尚未載入 API，保留原本的行為
+                const item = JININ_ITEMS[itemId];
+                if (item && window.playerData.gold >= item.cost) {
+                    window.playerData.gold -= item.cost;
+                    item.effect(window.playerData);
+                    window.playerData.upgrades.push(itemId);
+                    window.updateUI();
+                    renderManagementPanel();
+                } else {
+                    console.log('金幣不足！');
+                }
+            }
+        };
+
+        // 技能學習：點擊上半部按鈕，呼叫 window.learnSkill
+        // 影響範圍：會扣款、寫入 learnedSkills、可能改變 gps
+        const handleSkillClick = (event) => {
+            const btn = event.target.closest('.skill-item-btn');
+            if (!btn) return;
+            if (btn.classList.contains('unaffordable') || btn.getAttribute('aria-disabled') === 'true') return;
+
+            const skillId = btn.dataset.itemId;
+            if (typeof window.learnSkill === 'function') {
+                const result = window.learnSkill(skillId);
+                if (result.success) {
+                    renderSkillsPanel();
+                } else {
+                    console.log(result.message);
+                }
+            }
+        };
+
+        // 處理浮動控制按鈕點擊，切換面板
+        const handleContainerClick = (event) => {
+            // 檢查點擊的是否是懸浮按鈕
+            const button = event.target.closest('.floating-btn');
+            if (!button) return;
+
+            const targetPanelId = button.dataset.target;
+            const targetPanel = document.getElementById(targetPanelId);
+            if (!targetPanel) return;
+
+            const isPanelOpen = targetPanel.classList.contains('open');
+
+            document.querySelectorAll('.floating-panel.open').forEach(panel => {
+                panel.classList.remove('open');
+            });
+
+            if (!isPanelOpen) {
+                openFloatingPanel(button, targetPanel);
+            }
+        };
+
+        // --------------------------------------------------
+        // 綁定事件（Event Binding，事件綁定）
+        // 用途：用事件委派讓動態生成的按鈕也能被監聽
+        // 影響範圍：面板開關、tooltip、購買/學習互動
+        // --------------------------------------------------
+        // 使用事件委派：只在 container 上監聽 click，統一處理浮動按鈕與其它互動
+        container.addEventListener('click', handleContainerClick);
+        managementPanel.addEventListener('mouseover', handleMouseOver);
+        managementPanel.addEventListener('mouseout', handleMouseOut);
+        managementPanel.addEventListener('mousemove', handleMouseMove);
+        managementPanel.addEventListener('click', handlePurchaseClick);
+        skillsPanel.addEventListener('mouseover', handleMouseOver);
+        skillsPanel.addEventListener('mouseout', handleMouseOut);
+        skillsPanel.addEventListener('mousemove', handleMouseMove);
+        skillsPanel.addEventListener('click', handleSkillClick);
+
+        // 關鍵修正：將清理函式綁定到 this，而不是返回它
+        // 清理函式（cleanup）：
+        // 用途：頁面卸載/切換時，移除事件與還原被裝飾過的 updateUI
+        // 影響範圍：避免重複綁定事件、避免 updateUI 疊加多次造成重複渲染
+        this.cleanup = function() {
+            // 當頁面被銷毀時，恢復原始的 updateUI 函式
+            window.updateUI = originalUpdateUI;
+
+            // 移除 container 的委派事件及頁面相關監聽
+            container.removeEventListener('click', handleContainerClick);
+            managementPanel.removeEventListener('mouseover', handleMouseOver);
+            managementPanel.removeEventListener('mouseout',handleMouseOut);
+            managementPanel.removeEventListener('mousemove', handleMouseMove);
+            managementPanel.removeEventListener('click', handlePurchaseClick);
+            skillsPanel.removeEventListener('mouseover', handleMouseOver);
+            skillsPanel.removeEventListener('mouseout', handleMouseOut);
+            skillsPanel.removeEventListener('mousemove', handleMouseMove);
+            skillsPanel.removeEventListener('click', handleSkillClick);
+
+            // 監聽頁面容器的 display 變化
+            if (observer) {
+                observer.disconnect();
+            }
+        };
+    })(); // 立即執行此函式
+</script>
+
+<!-- 新增懸浮按鈕和面板的樣式 -->
+<style>
+    /*
+        這段 style 是「懸浮按鈕/面板/tooltip」的樣式集合
+
+        用途：
+        - 把 items 顯示成方形按鈕（可購買/已購買；可學習/已學習）
+        - 用粗分隔線把面板切成上下兩區
+        - 定義 tooltip（游標旁提示框）外觀
+        - 定義懸浮控制列與面板的位置與尺寸
+
+        影響範圍：
+        - 只影響 town 頁面的面板 UI
+    */
+
+    /* --- 技能面板：上半部（可學習） --- */
+    .skill-purchasable {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+        gap: 10px;
+    }
+
+    /* --- 技能面板：下半部（已學習） --- */
+    .skill-purchased {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+        gap: 10px;
+    }
+
+    /*
+        .skill-item-btn（技能按鈕：可學習）
+        用途：把技能顯示成方形按鈕
+        影響範圍：只影響技能面板上半部的互動按鈕
+    */
+    .skill-item-btn {
+        aspect-ratio: 1 / 1; /* 確保為正方形 */
+        padding: 5px;
+        font-size: 0.8rem;
+        background-color: #f0f0f0;
+        border: 1px solid #ccc;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.2s;
+        word-break: break-word; /* 處理長文字 */
+        background-color: #e6f7ff; /* 淡藍色背景 */
+        border-color: #91d5ff;
+    }
+    .skill-item-btn:hover {
+        background-color: #bae7ff;
+    }
+
+    /*
+        .skill-item-btn.unaffordable（技能買不起）
+        用途：用半透明/禁止游標提示不可點
+        影響範圍：仍可 hover 顯示 tooltip，但 click handler 會忽略
+    */
+    .skill-item-btn.unaffordable {
+        opacity: 0.6;
+        background-color: #f8f8f8;
+        cursor: not-allowed;
+    }
+
+    /*
+        .skill-item-owned（技能已學習）
+        用途：顯示在下半部，並讓它看起來是「已擁有」狀態
+        影響範圍：只影響技能面板下半部
+    */
+    .skill-item-owned {
+        aspect-ratio: 1 / 1;
+        padding: 5px;
+        font-size: 0.8rem;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        word-break: break-word;
+        cursor: default;
+
+        background-color: #e8f4e8; /* 淡綠色背景表示已擁有 */
+        color: #3a5a3a;
+        border: 1px solid #b8d8b8;
+    }
+    /* --- 面板分隔線（粗線，上下兩區） --- */
+    .panel-subtitle {
+        margin-top: 0;
+        margin-bottom: 10px;
+        font-size: 1rem;
+        color: #555;
+        border-bottom: 1px solid #eee;
+        padding-bottom: 5px;
+    }
+    .panel-separator {
+        border: none;
+        border-top: 4px solid #ccc;
+        margin: 20px 0;
+    }
+
+    /* --- 經營面板：下半部（已購買） --- */
+    .management-purchased {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
+        gap: 10px;
+    }
+    .mgmt-item-owned {
+        background-color: #e8f4e8; /* 淡綠色背景表示已擁有 */
+        color: #3a5a3a;
+        border: 1px solid #b8d8b8;
+        aspect-ratio: 1 / 1;
+        padding: 5px;
+        font-size: 0.8rem;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        word-break: break-word;
+        cursor: default;
+    }
+
+    /* --- 經營面板：整體為上下排列 --- */
+    .management-panel {
+        display: flex;
+        flex-direction: column;
+    }
+
+    /* --- 經營面板：上半部（可購買） --- */
+    .management-purchasable {
+        display: grid;
+        /* 縮小購買按鈕尺寸為原本的 75%：將最小格寬從 80px 調整為 60px */
+        grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
+        gap: 10px;
+    }
+    .mgmt-item-btn {
+        aspect-ratio: 1 / 1; /* 確保為正方形 */
+        padding: 4px; /* 稍微減少內距 */
+        font-size: 0.7rem; /* 縮小字體以配合按鈕尺寸 */
+        background-color: #e9f7ec; /* 可購買：淡綠色 */
+        border: 1px solid #8fd19a;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.2s;
+        word-break: break-word; /* 處理長文字 */
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .mgmt-item-btn.unaffordable {
+        opacity: 0.55;
+        background-color: #f5f5f7;
+        border-color: #ddd;
+        color: #888;
+        filter: grayscale(60%);
+        cursor: not-allowed;
+        box-shadow: none;
+    }
+
+    /*
+        .tooltip（游標旁提示框）
+        用途：顯示 item.info（說明文字），跟著游標移動
+        影響範圍：pointer-events: none 讓滑鼠不會被 tooltip 擋住
+    */
+    .tooltip {
+        display: none;
+        position: fixed; /* 相對於視窗定位 */
+        background-color: rgba(0, 0, 0, 0.8);
+        color: white;
+        padding: 8px 12px;
+        border-radius: 5px;
+        z-index: 100;
+        pointer-events: none; /* 讓滑鼠可以穿透它 */
+        font-size: 0.9rem;
+        max-width: 250px;
+    }
+
+    /*
+        #floating-controls-container（懸浮控制列的位置）
+        用途：把控制列固定在左側中間
+        影響範圍：面板會以此為基準靠右展開
+    */
+    #floating-controls-container {
+        position: absolute;
+        left: 30px;
+        top: 50%;
+        transform: translateY(-50%);
+        z-index: 10;
+        display: flex;
+        flex-direction: column;
+    }
+    
+    /*
+        .control-group（按鈕+面板的包裝）
+        用途：作為面板 absolute 定位的參考點
+        影響範圍：面板會相對這個元素定位在按鈕右側
+    */
+    .control-group {
+        position: relative; /* 為懸浮面板提供定位基準 */
+    }
+
+    /*
+        .floating-btn（面板切換按鈕）
+        用途：點擊後打開/關閉對應面板
+        影響範圍：只影響 UI，不直接改動玩家狀態
+    */
+    .floating-btn {
+        width: 80px;
+        padding: 10px;
+        font-size: 1rem;
+        background-color: #3498db;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        transition: background-color 0.2s;
+    }
+
+    .floating-btn:hover {
+        background-color: #2980b9;
+    }
+
+    /*
+        .floating-panel（面板容器）
+        用途：顯示經營/技能/數據內容
+        影響範圍：
+        - 預設 display:none
+        - 加上 .open 後 display:block 來顯示
+    */
+    .floating-panel {
+        display: none; /* 預設隱藏 */
+        position: absolute; /* 相對於 .control-group 定位，緊鄰按鈕右側 */
+        left: calc(100% + 10px); /* 緊鄰按鈕右側，保留 10px 間距 */
+        top: 50%;
+        transform: translateY(-50%);
+        width: 300px;
+        height: 320px; /* 固定高度 */
+        padding: 20px;
+        background-color: white;
+        border: 1px solid #ccc;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        overflow-y: auto; /* 當內容超出時，顯示垂直滾動條 */
+        z-index: 1000; /* 確保在控制群組上方 */
+    }
+
+    .floating-panel.open {
+        display: block; /* 顯示面板 */
+    }
+</style>

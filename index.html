@@ -1,0 +1,71 @@
+<!--
+  index.html（全域入口頁）
+
+  用途：
+  - 提供整個遊戲的「外框 UI」（左側選單 + 右側內容區）
+  - 載入全域 CSS（style.css）與全域 JS（main.js）
+  - 讓 main.js 可以把子頁面（welcome/town/bank...）動態插入到 #main-content
+
+  影響範圍：
+  - 所有頁面都會共用這個版面結構
+  - 左側選單按鈕會呼叫 loadPage() 切換右側顯示內容
+-->
+<html lang="zh-TW">
+<head>
+  <!-- charset（字元編碼）：確保中文顯示正常 -->
+  <meta charset="UTF-8" />
+
+  <!-- title（分頁標題）：顯示在瀏覽器分頁上 -->
+  <title>test</title>
+
+  <!-- 全域樣式：影響左側/右側版面與共用元件 -->
+  <link rel="stylesheet" href="style.css">
+
+  <!--
+    main.js（全域腳本）
+    defer：
+    - 用途：等待 HTML 解析完後再執行 JS
+    - 影響範圍：可避免 script 在 DOM 尚未建立完成時抓不到元素
+  -->
+  <script src="main.js" defer></script>
+</head>
+
+<body>
+  <!--
+    main-row（主列容器）
+    用途：使用 flex 讓左側固定寬度 + 右側自動填滿
+    影響範圍：決定整個 App 的兩欄式版面
+  -->
+  <div class="main-row">
+
+    <!--
+      zuo-panel（左側面板）
+      用途：放主選單按鈕（銀行/城鎮等）
+      影響範圍：使用者點擊按鈕會呼叫 loadPage() 切換右側內容
+    -->
+    <div class="zuo-panel">                <!--左側欄位-->
+      <h2>左邊功能選單</h2>
+
+      <!-- onclick：直接呼叫 main.js 的 loadPage() 來切換頁面 -->
+      <button onclick="loadPage('pages/bank/bank.html')">銀行</button>
+
+      <!--
+        #gold-display（金幣顯示）
+        用途：main.js 的 window.updateUI() 會更新這裡的文字
+        影響範圍：顯示玩家目前金幣（window.playerData.gold）
+      -->
+      <button onclick="loadPage('pages/town/town.html')">城鎮<span id="gold-display"></span></button>
+    </div>
+
+    <!--
+      yo-panel（右側面板）
+      用途：顯示子頁面內容（welcome / town / bank...）
+      影響範圍：loadPage() 會把抓到的 HTML 插入到 #main-content
+    -->
+    <div class="yo-panel">                 <!--右側欄位-->
+      <!-- 內容將會被動態載入到這裡 -->
+      <div id="main-content" style="width:100%; height:100%; padding: 1em;"></div>
+    </div>
+  </div>
+</body>
+</html>
