@@ -1,48 +1,90 @@
-// ==========================================================
-// ▼▼▼ 經營項目定義（包含可升級的農場 1..100 級） ▼▼▼
-// 用途：定義所有可購買經營項目（如農場、煤礦等）及其升級規則
-// 影響範圍：JININ_ITEMS 物件，供 UI 與購買流程使用
-// ==========================================================
-const JININ_ITEMS = {};
+(function () {
+    // ==========================================================
+    // ▼▼▼ 經營項目定義（包含可升級的農場 1..100 級） ▼▼▼
+    // 用途：定義所有可購買經營項目（如農場、煤礦等）及其升級規則
+    // 影響範圍：window.JININ_ITEMS 物件，供 UI 與購買流程使用
+    // ==========================================================
 
+    // 防呆：main.js 會快取頁面容器，但若未來改成重載頁面，重複載入腳本會造成頂層 const 重複宣告。
+    // 這裡用 guard 避免二次初始化。
+    if (window.JININ_ITEMS) return;
+
+    const JININ_ITEMS = {};
+
+// ==========================================================
+// 用途：城鎮功能啟動器
+// ==========================================================
+    JININ_ITEMS['start'] = {
+        name: '地契',
+        info: '承接這座城鎮',
+        cost: 0,
+        // 一開始就可購買（會由商業層 syncUnlockedItems 記錄為 unlocked）
+        tiougian: () => true,
+        // effect：一次性取得 10 cost 資源（本專案目前以 gold 作為通用資源）
+        effect: (playerData) => {
+            playerData.gold = (playerData.gold || 0) + 10;
+            playerData.maxGold = Math.max(playerData.maxGold || 0, playerData.gold);
+        }
+    };
 // 農場設定：定義農場名稱、最大等級、費用里程碑
 const FARM_BASE_NAME = '農場';
 const FARM_MAX_LEVEL = 100;
 
-// 指定的關鍵等級與對應費用（購買該等級時的費用）
-const FARM_COST_MILESTONES = {
-    1: 10,
-    2: 15,
-    3: 20,
-    4: 25,
-    5: 30,
-    6: 40,
-    7: 55,
-    8: 75,
-    9: 100,
-    10: 130,
-    15: 300,
-    20: 600,
-    25: 1100,
-    30: 1800,
-    35: 2800,
-    40: 4200,
-    45: 6200,
-    50: 9000,
-    55: 13000,
-    60: 18000,
-    65: 25000,
-    70: 35000,
-    75: 48000,
-    80: 65000, 
-    85: 85000,
-    90: 110000,
-    95: 140000,
-    100: 180000
-};
+// ----------------------------------------------------------
+// 成本曲線（Cost Curve）壓縮：用「少量斷點 + 分段指數插值」取代長里程碑表
+//
+// 需求背景：
+// - 原本用很多里程碑點做指數插值，能貼近想要的曲線，但資料表偏長。
+// - 你希望「不要里程碑表」，並且盡可能用最少分段、仍接近原曲線。
+//
+// 做法：
+// - 將 1..100 的原曲線壓縮成少量 breakpoints（斷點），每段用指數插值補齊。
+// - 這裡的斷點是離線用 DP 找到的「少分段 + 誤差小」方案：
+//   - farm：9 段（10 個斷點），對原曲線的最大相對誤差約 <= 5%
+//   - core：8 段（9 個斷點），對原曲線的最大相對誤差約 <= 4.7%
+//
+// 教學：
+// - 這仍然是「分段模型」，但比起每 5 等級一個點的表，資料量小很多。
+// - 若你願意接受更大誤差（例如 <=10%），可以再減少分段數。
 
-// 將里程碑排序成陣列以便插值
-const FARM_MILESTONE_LEVELS = Object.keys(FARM_COST_MILESTONES).map(l => parseInt(l, 10)).sort((a,b) => a-b);
+/**
+ * 分段指數插值：在斷點之間，用指數插值估算 cost
+ * @param {number} level - 目標等級（整數）
+ * @param {{level:number, cost:number}[]} breakpoints - 由小到大排序的斷點
+ * @returns {number} cost
+ */
+function getPiecewiseExponentialCost(level, breakpoints) {
+    if (!Number.isFinite(level)) return 0;
+    const target = Math.max(breakpoints[0].level, Math.min(level, breakpoints[breakpoints.length - 1].level));
+
+    for (let i = 0; i < breakpoints.length - 1; i++) {
+        const left = breakpoints[i];
+        const right = breakpoints[i + 1];
+        if (target < left.level || target > right.level) continue;
+        if (target === left.level) return left.cost;
+        if (target === right.level) return right.cost;
+
+        const ratio = (target - left.level) / (right.level - left.level);
+        return Math.round(left.cost * Math.pow(right.cost / left.cost, ratio));
+    }
+
+    // 理論上不會走到這裡；做個保底
+    return breakpoints[breakpoints.length - 1].cost;
+}
+
+// farm 壓縮斷點（9 段）
+const FARM_COST_BREAKPOINTS = [
+    { level: 1, cost: 10 },
+    { level: 2, cost: 15 },
+    { level: 5, cost: 30 },
+    { level: 10, cost: 130 },
+    { level: 12, cost: 182 },
+    { level: 20, cost: 600 },
+    { level: 29, cost: 1631 },
+    { level: 47, cost: 7197 },
+    { level: 74, cost: 45062 },
+    { level: 100, cost: 180000 }
+];
 
 /**
  * 取得指定等級農場的購買費用
@@ -51,30 +93,7 @@ const FARM_MILESTONE_LEVELS = Object.keys(FARM_COST_MILESTONES).map(l => parseIn
  * 用途：供 UI 與購買流程查詢
  */
 function getFarmCostForLevel(level) {
-    // 返回購買「達到該等級」所需的費用（也就是升級到該等級時的價格）
-    if (FARM_COST_MILESTONES[level]) return FARM_COST_MILESTONES[level];
-
-    // 目標為單一等級（1..100）
-    const target = level;
-
-    // 找到左右鄰近的里程碑
-    let lower = FARM_MILESTONE_LEVELS[0];
-    let upper = FARM_MILESTONE_LEVELS[FARM_MILESTONE_LEVELS.length - 1];
-
-    for (let i = 0; i < FARM_MILESTONE_LEVELS.length; i++) {
-        const lv = FARM_MILESTONE_LEVELS[i];
-        if (lv <= target) lower = lv;
-        if (lv >= target) { upper = lv; break; }
-    }
-
-    if (lower === upper) return FARM_COST_MILESTONES[lower];
-
-    const lowerCost = FARM_COST_MILESTONES[lower];
-    const upperCost = FARM_COST_MILESTONES[upper];
-    const ratio = (target - lower) / (upper - lower);
-    // 指數插值（exponential interpolation）以推估中間等級費用
-    const interpolated = Math.round(lowerCost * Math.pow(upperCost / lowerCost, ratio));
-    return interpolated;
+    return getPiecewiseExponentialCost(level, FARM_COST_BREAKPOINTS);
 }
 
 // 產生 farm 等級項目（每級為一個可購買項目）
@@ -107,18 +126,6 @@ for (let lv = 1; lv <= FARM_MAX_LEVEL; lv++) {
     };
 }
 
-// 保留其他非農場項目
-// 用途：可擴充其他經營項目（如特殊道具、點擊強化等）
-JININ_ITEMS['sharpStone'] = {
-    name: '尖銳的石頭',
-    info: '增加手動點擊的金幣量 (+1)',
-    cost: 50,
-    tiougian: (playerData) => playerData.gold >= 25,
-    effect: (playerData) => {
-        playerData.gpc = (playerData.gpc || 1) + 10000000;
-    }
-};
-
 // ==========================================================
 // ▼▼▼ 煤礦 (core) 項目定義（可升級 1..100 級，每級 +5 GPS） ▼▼▼
 // 用途：定義另一類可升級經營項目，與農場邏輯一致
@@ -126,37 +133,18 @@ JININ_ITEMS['sharpStone'] = {
 const CORE_BASE_NAME = '煤礦';
 const CORE_MAX_LEVEL = 100;
 
-const CORE_COST_MILESTONES = {
-    1: 2000,
-    2: 3200,
-    3: 5000,
-    4: 7500,
-    5: 11000,
-    6: 16000,
-    7: 23000,
-    8: 32000,
-    9: 44000,
-    10: 60000,
-    15: 140000,
-    20: 300000,
-    25: 550000,
-    30: 900000,
-    35: 1400000,
-    40: 2200000,
-    45: 3400000,
-    50: 5000000,
-    55: 7200000,
-    60: 10000000,
-    65: 14000000,
-    70: 19000000,
-    75: 26000000,
-    80: 35000000,
-    85: 47000000,
-    90: 63000000,
-    100: 105000000
-};
-
-const CORE_MILESTONE_LEVELS = Object.keys(CORE_COST_MILESTONES).map(l => parseInt(l, 10)).sort((a,b) => a-b);
+// core 壓縮斷點（8 段）
+const CORE_COST_BREAKPOINTS = [
+    { level: 1, cost: 2000 },
+    { level: 3, cost: 5000 },
+    { level: 7, cost: 23000 },
+    { level: 10, cost: 60000 },
+    { level: 20, cost: 300000 },
+    { level: 28, cost: 739079 },
+    { level: 49, cost: 4628836 },
+    { level: 75, cost: 26000000 },
+    { level: 100, cost: 105000000 }
+];
 
 /**
  * 取得指定等級煤礦的購買費用
@@ -165,25 +153,7 @@ const CORE_MILESTONE_LEVELS = Object.keys(CORE_COST_MILESTONES).map(l => parseIn
  * 用途：供 UI 與購買流程查詢
  */
 function getCoreCostForLevel(level) {
-    if (CORE_COST_MILESTONES[level]) return CORE_COST_MILESTONES[level];
-
-    const target = level;
-    let lower = CORE_MILESTONE_LEVELS[0];
-    let upper = CORE_MILESTONE_LEVELS[CORE_MILESTONE_LEVELS.length - 1];
-
-    for (let i = 0; i < CORE_MILESTONE_LEVELS.length; i++) {
-        const lv = CORE_MILESTONE_LEVELS[i];
-        if (lv <= target) lower = lv;
-        if (lv >= target) { upper = lv; break; }
-    }
-
-    if (lower === upper) return CORE_COST_MILESTONES[lower];
-
-    const lowerCost = CORE_COST_MILESTONES[lower];
-    const upperCost = CORE_COST_MILESTONES[upper];
-    const ratio = (target - lower) / (upper - lower);
-    const interpolated = Math.round(lowerCost * Math.pow(upperCost / lowerCost, ratio));
-    return interpolated;
+    return getPiecewiseExponentialCost(level, CORE_COST_BREAKPOINTS);
 }
 
 // 產生 core 等級項目（每級為一個可購買項目）
@@ -221,4 +191,5 @@ for (let lv = 1; lv <= CORE_MAX_LEVEL; lv++) {
 // 教學：
 // - 在瀏覽器中，頂層宣告的 const（例如 const JININ_ITEMS）不一定會變成 window 的屬性
 // - 為了讓「跨檔案」讀取更直覺，這裡明確掛到 window
-window.JININ_ITEMS = JININ_ITEMS;
+    window.JININ_ITEMS = JININ_ITEMS;
+})();

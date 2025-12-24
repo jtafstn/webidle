@@ -108,4 +108,37 @@
   // 影響範圍：外部可以透過 window.purchaseItem / window.learnSkill 觸發購買/學習
   window.purchaseItem = purchaseItem;
   window.learnSkill = learnSkill;
+
+  // -------------------------------
+  // 解鎖同步（UI 反映狀態，不決定結果）
+  // -------------------------------
+  /**
+   * 同步 unlockedItems：把「曾經滿足解鎖條件」的經營項目記錄下來。
+   *
+   * 設計理由（對應 town_contect.md）：
+   * - UI 只負責顯示；解鎖規則屬於遊戲狀態/規則，應由商業層負責。
+   * - unlockedItems 是狀態的一部分（會進存檔），不要由 UI 任意改動。
+   */
+  function syncUnlockedItems() {
+    if (!window.playerData) return;
+
+    const jininItems = window.JININ_ITEMS || (typeof JININ_ITEMS !== 'undefined' ? JININ_ITEMS : null);
+    if (!jininItems) return;
+
+    window.playerData.upgrades = window.playerData.upgrades || [];
+    window.playerData.unlockedItems = window.playerData.unlockedItems || [];
+
+    for (const itemId in jininItems) {
+      if (window.playerData.upgrades.includes(itemId)) continue;
+
+      const item = jininItems[itemId];
+      if (typeof item?.tiougian !== 'function') continue;
+
+      if (item.tiougian(window.playerData) && !window.playerData.unlockedItems.includes(itemId)) {
+        window.playerData.unlockedItems.push(itemId);
+      }
+    }
+  }
+
+  window.syncUnlockedItems = syncUnlockedItems;
 })();

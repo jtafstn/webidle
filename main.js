@@ -167,26 +167,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // 判斷是否在 town 頁面背景點擊，觸發點擊產出
     const townWrapper = event.target.closest('#town-wrapper');
 
-    // 關鍵修正：只有當點擊的目標是背景 (#town-content) 時，才觸發賺錢邏輯。
-    // 這樣可以完全避免與按鈕點擊事件的衝突。
-    // 點擊背景才加金幣，避免與按鈕衝突
+    // 變更：取消 Town 內「點擊賺取資源」
+    // - 依需求：Town 不再透過點擊背景取得 cost/金幣資源。
+    // - 仍保留 townWrapper 的判斷，避免未來要加回互動時找不到掛點。
+    // - 目前不做任何事。
     if (townWrapper && event.target.id === 'town-content') {
-      // 點擊產出：每次點擊增加 gpc 金幣
-      window.playerData.gold += window.playerData.gpc;
-      // 更新歷史最高金幣
-      // 更新歷史最高金幣
-      window.playerData.maxGold = Math.max(window.playerData.maxGold || 0, window.playerData.gold);
-      window.updateUI(); // 更新 UI
-
-      // 動畫顯示 +金幣 效果
-      const floatingText = document.createElement('div');
-      floatingText.textContent = `+${window.playerData.gpc}`;
-      floatingText.className = 'floating-text';
-      floatingText.style.left = `${event.clientX - townWrapper.getBoundingClientRect().left}px`;
-      floatingText.style.top = `${event.clientY - townWrapper.getBoundingClientRect().top}px`;
-      townWrapper.appendChild(floatingText);
-
-      floatingText.addEventListener('animationend', () => floatingText.remove());
+      return;
     }
 
     // ▼▼▼（保留）舊版購買按鈕事件委派 ▼▼▼
