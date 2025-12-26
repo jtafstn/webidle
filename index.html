@@ -4,7 +4,7 @@
   用途：
   - 提供整個遊戲的「外框 UI」（左側選單 + 右側內容區）
   - 載入全域 CSS（style.css）與全域 JS（main.js）
-  - 讓 main.js 可以把子頁面（welcome/town/bank...）動態插入到 #main-content
+  - 讓 main.js 可以把子頁面（welcome/jouguan/bank...）動態插入到 #main-content
 
   影響範圍：
   - 所有頁面都會共用這個版面結構
@@ -21,13 +21,53 @@
   <!-- 全域樣式：影響左側/右側版面與共用元件 -->
   <link rel="stylesheet" href="style.css">
 
+  <!-- 早期診斷：捕捉 main.js 載入/執行錯誤，避免無聲失敗 -->
+  <script>
+    (function () {
+      window.__boot = { mainLoaded: false, mainLoadError: false, lastError: null };
+      window.addEventListener('error', function (e) {
+        var msg = (e && e.message) ? e.message : String(e);
+        var src = (e && e.filename) ? e.filename : '';
+        var line = (e && typeof e.lineno === 'number') ? e.lineno : '';
+        var col = (e && typeof e.colno === 'number') ? e.colno : '';
+        var stack = (e && e.error && e.error.stack) ? String(e.error.stack) : '';
+        // 只取前幾行避免太長
+        if (stack) stack = stack.split('\n').slice(0, 3).join(' | ');
+        window.__boot.lastError = msg + (src ? (' @ ' + src + ':' + line + ':' + col) : '') + (stack ? (' | ' + stack) : '');
+      });
+    })();
+  </script>
+
   <!--
     main.js（全域腳本）
     defer：
     - 用途：等待 HTML 解析完後再執行 JS
     - 影響範圍：可避免 script 在 DOM 尚未建立完成時抓不到元素
   -->
-  <script src="main.js" defer></script>
+  <script src="main.js" defer
+    onload="window.__boot && (window.__boot.mainLoaded = true)"
+    onerror="window.__boot && (window.__boot.mainLoadError = true)"></script>
+
+  <!-- 若 main.js 沒執行到更新狀態，這裡會顯示最小診斷資訊 -->
+  <script>
+    window.addEventListener('DOMContentLoaded', function () {
+      var el = document.getElementById('app-status');
+      if (!el) return;
+      if (window.__boot && window.__boot.mainLoadError) {
+        el.textContent = '狀態：main.js 載入失敗（請確認 Live Server root 在專案根目錄）';
+        return;
+      }
+      if (window.__boot && window.__boot.lastError) {
+        el.textContent = '狀態：JS 錯誤：' + window.__boot.lastError;
+        return;
+      }
+      // 如果 main.js 有跑起來，會自行把狀態從「載入中…」改掉；
+      // 走到這裡代表 main.js 可能尚未執行或被提早中止。
+      if (el.textContent && el.textContent.indexOf('載入中') >= 0) {
+        el.textContent = '狀態：等待 main.js 初始化…';
+      }
+    });
+  </script>
 </head>
 
 <body>
@@ -46,25 +86,33 @@
     <div class="zuo-panel">                <!--左側欄位-->
       <h2>左邊功能選單</h2>
 
-      <!-- onclick：直接呼叫 main.js 的 loadPage() 來切換頁面 -->
-      <button onclick="loadPage('pages/bank/bank.html')">銀行</button>
+      <!-- 狀態列：用來顯示 JS 是否已啟動/目前導頁狀態（避免無聲失敗） -->
+      <div id="app-status" style="font-size: 12px; color: #888; margin-bottom: 10px;">狀態：載入中…</div>
+
+      <!-- 導頁按鈕：由 main.js 統一用事件委派處理（避免 inline onclick 在某些環境失效） -->
+      <button data-page="pages/bank/bank.html">銀行</button>
 
       <!--
         #gold-display（金幣顯示）
         用途：main.js 的 window.updateUI() 會更新這裡的文字
         影響範圍：顯示玩家目前金幣（window.playerData.gold）
       -->
-      <button onclick="loadPage('pages/town/town.html')">城鎮<span id="gold-display"></span></button>
+      <button class="button-with-display" data-page="pages/jouguan/jouguan.html">酒館<span id="gold-display"></span></button>
     </div>
 
     <!--
       yo-panel（右側面板）
-      用途：顯示子頁面內容（welcome / town / bank...）
+      用途：顯示子頁面內容（welcome / jouguan / bank...）
       影響範圍：loadPage() 會把抓到的 HTML 插入到 #main-content
     -->
     <div class="yo-panel">                 <!--右側欄位-->
       <!-- 內容將會被動態載入到這裡 -->
-      <div id="main-content" style="width:100%; height:100%; padding: 1em;"></div>
+      <div id="main-content" style="width:100%; height:100%; padding: 1em;">
+        <div id="home-fallback">
+          <h1>這是 welcome 頁面</h1>
+          <p>點左側選單開始</p>
+        </div>
+      </div>
     </div>
   </div>
 </body>

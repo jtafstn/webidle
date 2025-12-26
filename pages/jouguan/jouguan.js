@@ -1,12 +1,12 @@
 /**
- * town.js
- * 用途：提供 Town（城鎮）頁面的共用資料操作 API（購買經營項目/學習技能）
+ * jouguan.js
+ * 用途：提供 jouguan（酒館）頁面的共用資料操作 API（購買經營項目/學習技能）
  * 影響範圍：
  * - 會改動 window.playerData（金幣、已購買 upgrades、已學習 learnedSkills）
  * - 會提供 window.purchaseItem / window.learnSkill 讓其他腳本呼叫
  *
  * 注意：
- * - 此檔案「不負責渲染 DOM」，只處理資料；避免與 town.html 的面板渲染互相覆蓋。
+ * - 此檔案「不負責渲染 DOM」，只處理資料；避免與 jouguan.html 的面板渲染互相覆蓋。
  * - 讀取資料表時，會同時嘗試 window.JININ_ITEMS 與全域常數 JININ_ITEMS。
  *   原因：瀏覽器中「頂層 const」不一定會變成 window 的屬性（不像 var）。
  */
@@ -40,23 +40,35 @@
     // upgrades：已購買清單
     // 用途：避免 undefined 造成 includes/push 出錯
     window.playerData.upgrades = window.playerData.upgrades || [];
+    window.playerData.itemCounts = window.playerData.itemCounts || {};
 
-    if (window.playerData.upgrades.includes(itemId)) return { success: false, message: '已擁有' };
+    const isRepeatable = !!item.repeatable;
+    const alreadyOwned = window.playerData.upgrades.includes(itemId);
+
+    if (!isRepeatable && alreadyOwned) return { success: false, message: '已擁有' };
     if (typeof item.tiougian === 'function' && !item.tiougian(window.playerData)) {
       return { success: false, message: '尚未解鎖' };
     }
-    if ((window.playerData.gold || 0) < item.cost) return { success: false, message: '金幣不足' };
+
+    const cost = typeof item.cost === 'function' ? item.cost(window.playerData) : item.cost;
+    const normalizedCost = Number.isFinite(cost) ? cost : 0;
+    if ((window.playerData.gold || 0) < normalizedCost) return { success: false, message: '金幣不足' };
 
     // 1) 扣款
-    window.playerData.gold -= item.cost;
+    window.playerData.gold -= normalizedCost;
 
     // 2) 套用效果（例如增加 gps）
     if (typeof item.effect === 'function') item.effect(window.playerData);
 
-    // 3) 記錄為已購買
-    window.playerData.upgrades.push(itemId);
+    // 3) 記錄狀態
+    if (isRepeatable) {
+      window.playerData.itemCounts[itemId] = (window.playerData.itemCounts[itemId] || 0) + 1;
+    } else {
+      window.playerData.upgrades.push(itemId);
+    }
 
     if (typeof window.updateUI === 'function') window.updateUI();
+    if (typeof window.saveGame === 'function') window.saveGame();
     return { success: true, message: '購買成功' };
   }
 
@@ -88,10 +100,12 @@
     if (typeof skill.tiougian === 'function' && !skill.tiougian(window.playerData)) {
       return { success: false, message: '尚未解鎖' };
     }
-    if ((window.playerData.gold || 0) < skill.cost) return { success: false, message: '金幣不足' };
+    const cost = typeof skill.cost === 'function' ? skill.cost(window.playerData) : skill.cost;
+    const normalizedCost = Number.isFinite(cost) ? cost : 0;
+    if ((window.playerData.gold || 0) < normalizedCost) return { success: false, message: '金幣不足' };
 
     // 1) 扣款
-    window.playerData.gold -= skill.cost;
+    window.playerData.gold -= normalizedCost;
 
     // 2) 先記錄為已學習（避免 effect 內需要檢查狀態時找不到）
     window.playerData.learnedSkills.push(skillId);
@@ -100,11 +114,12 @@
     if (typeof skill.effect === 'function') skill.effect(window.playerData);
 
     if (typeof window.updateUI === 'function') window.updateUI();
+    if (typeof window.saveGame === 'function') window.saveGame();
     return { success: true, message: '學習成功' };
   }
 
   // 將 API 掛到全域（window）
-  // 用途：讓 town.html（面板 UI）或其他頁面可以直接呼叫
+  // 用途：讓 jouguan.html（面板 UI）或其他頁面可以直接呼叫
   // 影響範圍：外部可以透過 window.purchaseItem / window.learnSkill 觸發購買/學習
   window.purchaseItem = purchaseItem;
   window.learnSkill = learnSkill;
@@ -115,7 +130,7 @@
   /**
    * 同步 unlockedItems：把「曾經滿足解鎖條件」的經營項目記錄下來。
    *
-   * 設計理由（對應 town_contect.md）：
+  * 設計理由（對應 jouguan_contect.md）：
    * - UI 只負責顯示；解鎖規則屬於遊戲狀態/規則，應由商業層負責。
    * - unlockedItems 是狀態的一部分（會進存檔），不要由 UI 任意改動。
    */
@@ -129,10 +144,11 @@
     window.playerData.unlockedItems = window.playerData.unlockedItems || [];
 
     for (const itemId in jininItems) {
-      if (window.playerData.upgrades.includes(itemId)) continue;
-
       const item = jininItems[itemId];
       if (typeof item?.tiougian !== 'function') continue;
+
+      const isRepeatable = !!item.repeatable;
+      if (!isRepeatable && window.playerData.upgrades.includes(itemId)) continue;
 
       if (item.tiougian(window.playerData) && !window.playerData.unlockedItems.includes(itemId)) {
         window.playerData.unlockedItems.push(itemId);

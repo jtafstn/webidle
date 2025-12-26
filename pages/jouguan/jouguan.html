@@ -1,15 +1,15 @@
 <!--
-    town.html（城鎮／經營頁）
+    jouguan.html（jouguan／酒館經營頁）
 
     用途：
-    - 提供 Town（城鎮）場景的互動 UI（點擊賺錢 + 懸浮面板）
+    - 提供 jouguan（酒館）場景的互動 UI（來客自動結算 + 懸浮面板）
     - 顯示「經營（jinin）」/「技能（skill）」/「數據（data）」面板
     - 提供 item tooltip（提示框）顯示 item 的 info
 
     影響範圍：
     - 會讀寫 window.playerData（全域狀態）：例如 upgrades / unlockedItems / learnedSkills
-    - 會依賴外部腳本建立資料表：pages/town/jinin.js（JININ_ITEMS）、pages/town/skill.js（SKILL_ITEMS）
-    - 會依賴 pages/town/town.js 提供全域 API：window.purchaseItem / window.learnSkill
+    - 會依賴外部腳本建立資料表：pages/jouguan/jinin.js（JININ_ITEMS）、pages/jouguan/skill.js（SKILL_ITEMS）
+    - 會依賴 pages/jouguan/jouguan.js 提供全域 API：window.purchaseItem / window.learnSkill
 
     教學：
     - 本檔案會被 main.js 的 loadPage() 動態插入到 index.html 的 #main-content
@@ -17,14 +17,14 @@
 -->
 
 <!--
-    #town-wrapper（本頁主容器）
+    #jouguan-wrapper（本頁主容器）
     用途：提供相對定位基準，讓懸浮控制與 tooltip 可以正確定位
     影響範圍：本頁所有 UI 都包在這裡，事件委派也會以這個區塊為主
 -->
-<div id="town-wrapper">
-    <div id="town-content">
+<div id="jouguan-wrapper">
+    <div id="jouguan-content">
         <!-- 點擊區域，觸發金幣產出，顯示標題與提示 -->
-        <h2>Town</h2>
+        <h2>jouguan</h2>
     </div>
 
         <!-- 懸浮控制按鈕與面板
@@ -85,28 +85,28 @@
 
 <style>
         /*
-            這段 style 是 town 頁面的「頁面內樣式」
+            這段 style 是 jouguan 頁面的「頁面內樣式」
 
             用途：
-            - 定義 town 場景的主互動區（#town-content）
+            - 定義 jouguan 場景的主互動區（#jouguan-content）
             - 定義點擊 +金幣 的浮動文字（.floating-text）動畫
 
             影響範圍：
             - 只影響本頁插入後的 DOM
         */
-    #town-wrapper {
+    #jouguan-wrapper {
         position: relative;
         width: 100%;
         height: 100%;
     }
-    #town-content {
+    #jouguan-content {
         height: 100%;
         width: 100%;
         display: flex;
         flex-direction: column;
         justify-content: center;
         align-items: center;
-        cursor: pointer;
+        cursor: default;
         position: relative;
         user-select: none; /* 防止點擊時選取文字 */
         background-color: #f0f8ff;
@@ -149,10 +149,10 @@
     用途：初始化經營、技能、互動行為
     影響範圍：JININ_ITEMS、SKILL_ITEMS、互動事件
 -->
-<script src="pages/town/jinin.js"></script>
-<script src="pages/town/skill.js"></script>
-<script src="pages/town/town.js"></script>
-<script src="pages/town/town-ui.js"></script>
+<script src="pages/jouguan/jinin.js"></script>
+<script src="pages/jouguan/skill.js"></script>
+<script src="pages/jouguan/jouguan.js"></script>
+<script src="pages/jouguan/jouguan-ui.js"></script>
 
 <!-- 新增懸浮按鈕和面板的樣式 -->
 <style>
@@ -166,7 +166,7 @@
         - 定義懸浮控制列與面板的位置與尺寸
 
         影響範圍：
-        - 只影響 town 頁面的面板 UI
+        - 只影響 jouguan 頁面的面板 UI
     */
 
     /* --- 技能面板：上半部（可學習） --- */

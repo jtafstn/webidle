@@ -50,7 +50,7 @@
 
   /*
     .yo-panel（右側面板）
-    用途：顯示子頁面內容（welcome/town/bank...）
+    用途：顯示子頁面內容（welcome/jouguan/bank...）
     影響範圍：右側會隨視窗寬度自動填滿；內容過長可捲動
   */
   .yo-panel {
@@ -101,7 +101,7 @@
     justify-content: space-between;
     align-items: center;
   }
-  #town-gold-display {
+  #jouguan-gold-display {
     color: #888;
   }
 
